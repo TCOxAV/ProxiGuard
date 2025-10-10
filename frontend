@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoSense - AI Safety Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #1976D2;
+            --primary-dark: #0D47A1;
+            --accent-color: #FF4081;
+            --success-color: #4CAF50;
+            --warning-color: #FFC107;
+            --danger-color: #F44336;
+            --text-primary: #212121;
+            --text-secondary: #757575;
+            --background: #F5F5F5;
+            --card-background: #FFFFFF;
+            --divider: #E0E0E0;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--background);
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+        
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 0;
+            background-color: var(--background);
+            min-height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header-title {
+            display: flex;
+            align-items: center;
+        }
+        
+        .header-title .material-icons {
+            margin-right: 8px;
+            font-size: 28px;
+        }
+        
+        .header-title h1 {
+            font-size: 22px;
+            font-weight: 500;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            background-color: rgba(255,255,255,0.2);
+            padding: 6px 12px;
+            border-radius: 16px;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--success-color);
+            margin-right: 6px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.inactive {
+            background-color: var(--text-secondary);
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .status-text {
+            font-size: 14px;
+        }
+        
+        main {
+            padding: 16px;
+        }
+        
+        .monitor-card {
+            background-color: var(--card-background);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .monitor-status {
+            margin-bottom: 24px;
+        }
+        
+        .monitor-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            color: var(--primary-color);
+        }
+        
+        .monitor-icon.active {
+            color: var(--success-color);
+        }
+        
+        .monitor-title {
+            font-size: 24px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        
+        .monitor-subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+        
+        .toggle-button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 16px 32px;
+            font-size: 18px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+        }
+        
+        .toggle-button:hover {
+            background-color: var(--primary-dark);
+        }
+        
+        .toggle-button.active {
+            background-color: var(--danger-color);
+        }
+        
+        .toggle-button .material-icons {
+            margin-right: 8px;
+        }
+        
+        .info-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .info-card {
+            background-color: var(--card-background);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .info-card .material-icons {
+            font-size: 32px;
+            margin-bottom: 8px;
+            color: var(--primary-color);
+        }
+        
+        .info-card-title {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        
+        .info-card-value {
+            font-size: 18px;
+            color: var(--text-secondary);
+        }
+        
+        .emergency-contacts {
+            background-color: var(--card-background);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .section-title .material-icons {
+            margin-right: 8px;
+            color: var(--primary-color);
+        }
+        
+        .contact-list {
+            list-style: none;
+        }
+        
+        .contact-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--divider);
+        }
+        
+        .contact-item:last-child {
+            border-bottom: none;
+        }
+        
+        .contact-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-weight: 500;
+        }
+        
+        .contact-info {
+            flex: 1;
+        }
+        
+        .contact-name {
+            font-weight: 500;
+        }
+        
+        .contact-phone {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        .contact-action {
+            color: var(--primary-color);
+        }
+        
+        .add-contact {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+            color: var(--primary-color);
+            font-weight: 500;
+            cursor: pointer;
+        }
+        
+        .add-contact .material-icons {
+            margin-right: 8px;
+        }
+        
+        .settings-card {
+            background-color: var(--card-background);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .settings-list {
+            list-style: none;
+        }
+        
+        .settings-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--divider);
+        }
+        
+        .settings-item:last-child {
+            border-bottom: none;
+        }
+        
+        .settings-label {
+            display: flex;
+            align-items: center;
+        }
+        
+        .settings-label .material-icons {
+            margin-right: 12px;
+            color: var(--primary-color);
+        }
+        
+        .toggle-switch {
+            position: relative;
+            width: 48px;
+            height: 24px;
+            background-color: var(--divider);
+            border-radius: 24px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .toggle-switch.active {
+            background-color: var(--primary-color);
+        }
+        
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: white;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+        }
+        
+        .toggle-switch.active::after {
+            transform: translateX(24px);
+        }
+        
+        .emergency-alert {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            color: white;
+            animation: fadeIn 0.5s;
+        }
+        
+        .emergency-alert.active {
+            display: flex;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .alert-icon {
+            font-size: 80px;
+            color: var(--danger-color);
+            margin-bottom: 24px;
+            animation: pulse 1s infinite;
+        }
+        
+        .alert-title {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .alert-message {
+            font-size: 20px;
+            margin-bottom: 32px;
+            text-align: center;
+            max-width: 80%;
+        }
+        
+        .alert-button {
+            background-color: var(--danger-color);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 16px 32px;
+            font-size: 18px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .alert-button:hover {
+            background-color: #D32F2F;
+        }
+        
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            max-width: 480px;
+            margin: 0 auto;
+            background-color: var(--card-background);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 16px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+        
+        .nav-item.active {
+            color: var(--primary-color);
+        }
+        
+        .nav-item .material-icons {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+        
+        .nav-item span {
+            font-size: 12px;
+        }
+        
+        .permission-banner {
+            background-color: var(--warning-color);
+            color: var(--text-primary);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+            border-radius: 8px;
+        }
+        
+        .permission-banner .material-icons {
+            margin-right: 8px;
+        }
+        
+        .permission-message {
+            flex: 1;
+        }
+        
+        .permission-action {
+            background-color: rgba(0,0,0,0.1);
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="header-title">
+                <span class="material-icons">security</span>
+                <h1>EchoSense</h1>
+            </div>
+            <div class="status-indicator">
+                <div class="status-dot inactive" id="statusDot"></div>
+                <span class="status-text" id="statusText">Inactive</span>
+            </div>
+        </header>
+        
+        <main>
+            <div class="permission-banner hidden" id="permissionBanner">
+                <span class="material-icons">warning</span>
+                <div class="permission-message">Permissions required for monitoring</div>
+                <button class="permission-action" id="grantPermissions">Grant</button>
+            </div>
+            
+            <div class="monitor-card">
+                <div class="monitor-status">
+                    <span class="material-icons monitor-icon" id="monitorIcon">hearing_disabled</span>
+                    <h2 class="monitor-title" id="monitorTitle">Monitoring Inactive</h2>
+                    <p class="monitor-subtitle" id="monitorSubtitle">Tap to start 24/7 safety monitoring</p>
+                </div>
+                <button class="toggle-button" id="toggleButton">
+                    <span class="material-icons">play_arrow</span>
+                    Start Monitoring
+                </button>
+            </div>
+            
+            <div class="info-cards">
+                <div class="info-card">
+                    <span class="material-icons">location_on</span>
+                    <div class="info-card-title">Location</div>
+                    <div class="info-card-value" id="locationValue">Unknown</div>
+                </div>
+                <div class="info-card">
+                    <span class="material-icons">battery_full</span>
+                    <div class="info-card-title">Battery</div>
+                    <div class="info-card-value" id="batteryValue">85%</div>
+                </div>
+                <div class="info-card">
+                    <span class="material-icons">signal_cellular_alt</span>
+                    <div class="info-card-title">Signal</div>
+                    <div class="info-card-value" id="signalValue">4G</div>
+                </div>
+                <div class="info-card">
+                    <span class="material-icons">access_time</span>
+                    <div class="info-card-title">Uptime</div>
+                    <div class="info-card-value" id="uptimeValue">0h 0m</div>
+                </div>
+            </div>
+            
+            <div class="emergency-contacts">
+                <div class="section-title">
+                    <span class="material-icons">contacts</span>
+                    Emergency Contacts
+                </div>
+                <ul class="contact-list">
+                    <li class="contact-item">
+                        <div class="contact-avatar">JD</div>
+                        <div class="contact-info">
+                            <div class="contact-name">John Doe</div>
+                            <div class="contact-phone">+1 234-567-8901</div>
+                        </div>
+                        <span class="material-icons contact-action">edit</span>
+                    </li>
+                    <li class="contact-item">
+                        <div class="contact-avatar">EM</div>
+                        <div class="contact-info">
+                            <div class="contact-name">Emergency Services</div>
+                            <div class="contact-phone">911</div>
+                        </div>
+                        <span class="material-icons contact-action">edit</span>
+                    </li>
+                </ul>
+                <div class="add-contact">
+                    <span class="material-icons">add_circle</span>
+                    Add Emergency Contact
+                </div>
+            </div>
+            
+            <div class="settings-card">
+                <div class="section-title">
+                    <span class="material-icons">settings</span>
+                    Settings
+                </div>
+                <ul class="settings-list">
+                    <li class="settings-item">
+                        <div class="settings-label">
+                            <span class="material-icons">volume_up</span>
+                            <span>Override Silent Mode</span>
+                        </div>
+                        <div class="toggle-switch active" id="silentModeToggle"></div>
+                    </li>
+                    <li class="settings-item">
+                        <div class="settings-label">
+                            <span class="material-icons">vibration</span>
+                            <span>Strong Haptics</span>
+                        </div>
+                        <div class="toggle-switch active" id="hapticsToggle"></div>
+                    </li>
+                    <li class="settings-item">
+                        <div class="settings-label">
+                            <span class="material-icons">notifications_active</span>
+                            <span>Fullscreen Alerts</span>
+                        </div>
+                        <div class="toggle-switch active" id="alertsToggle"></div>
+                    </li>
+                    <li class="settings-item">
+                        <div class="settings-label">
+                            <span class="material-icons">sms</span>
+                            <span>SOS Messages</span>
