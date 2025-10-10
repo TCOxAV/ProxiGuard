@@ -3,28 +3,4 @@ https://drive.google.com/drive/folders/1Gk5ubSRZkPfQceDvYUiuOztC5vOC6HAV
 Mobile Application
 main popup
 
-1. Audio Capture & Analysis
-
-Environment microphones (phone mic, IoT sensors, or wearable mics) capture ambient sound.
-
-AI detects and classifies high-priority events (alarms, announcements, sirens, etc.).
-
-2. Alert Decision Engine
-
-Once the system identifies a critical event, it triggers alerts through two layers:
-
-🪄 Layer 1: Bluetooth Device Alert (if connected)
-
-If a smartwatch, smart band, or earbuds is paired via Bluetooth:
-
-🔹 Vibration pattern — distinct for urgency:
-
-Short pulses = information
-
-Long + fast pulses = emergency
-
-🔹 Optional subtle sound tone in earbuds.
-
-🔹 Smartwatch display flashes a brief text alert or symbol (🔥, 🚨, ⚠️).
-
-This ensures instant haptic or auditory feedback without needing to look at the main device.
+https://chatgpt.com/share/68e8e0f3-1404-8011-8a86-32cfe0dffa61
