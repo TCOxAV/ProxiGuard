@@ -1,0 +1,225 @@
+/* File: DangerListenerApp.kt
+   Single Kotlin file containing MainActivity, Foreground Service, and BootReceiver.
+   NOTE: You must add the AndroidManifest entries and runtime-grant RECORD_AUDIO and SEND_SMS to test.
+   Required permissions in Manifest (example below) and request at runtime from MainActivity.
+   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+   <uses-permission android:name="android.permission.SEND_SMS"/>
+   <application ...>
+     <service android:name=".DangerService" android:foregroundServiceType="microphone"/>
+     <receiver android:name=".BootReceiver">
+       <intent-filter>
+         <action android:name="android.intent.action.BOOT_COMPLETED"/>
+       </intent-filter>
+     </receiver>
+   </application>
+*/
+package com.example.dangerlistener
+
+import android.Manifest
+import android.app.*
+import android.content.*
+import android.os.*
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.telephony.SmsManager
+import android.widget.Toast
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import androidx.appcompat.app.AppCompatActivity
+import android.content.pm.PackageManager
+import android.util.Log
+import java.util.*
+
+class MainActivity : AppCompatActivity() {
+    private val REQ_PERM = 1234
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // No UI required for this minimal example; still set a simple view or keep empty
+        val CHANNEL_ID = "danger_listener_channel"
+        createNotificationChannel(CHANNEL_ID)
+        // Request permissions
+        val perms = arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.SEND_SMS)
+        val missing = perms.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, missing.toTypedArray(), REQ_PERM)
+        } else {
+            startDangerService()
+        }
+    }
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_PERM) {
+            val denied = grantResults.any { it != PackageManager.PERMISSION_GRANTED }
+            if (denied) {
+                Toast.makeText(this, "Required permissions denied. App cannot run.", Toast.LENGTH_LONG).show()
+            } else startDangerService()
+        }
+    }
+    private fun startDangerService() {
+        val intent = Intent(this, DangerService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
+        Toast.makeText(this, "Danger listener started", Toast.LENGTH_SHORT).show()
+        finish() // close activity to run headless
+    }
+    private fun createNotificationChannel(channelId: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "Danger Listener"
+            val chan = NotificationChannel(channelId, name, NotificationManager.IMPORTANCE_LOW)
+            chan.setSound(null, null)
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(chan)
+        }
+    }
+}
+
+class DangerService : Service(), RecognitionListener {
+    private val TAG = "DangerService"
+    private lateinit var speechRecognizer: SpeechRecognizer
+    private lateinit var recognizerIntent: Intent
+    private val CHANNEL_ID = "danger_listener_channel"
+    private val NOTIF_ID = 4242
+    private val ALERT_NUMBERS = arrayOf("+911234567890") // Replace with real numbers or manage dynamically
+    private var lastAlertTime = 0L
+    private val ALERT_COOLDOWN_MS = 60_000L // one minute cooldown to prevent spamming
+    override fun onBind(intent: Intent?) = null
+    override fun onCreate() {
+        super.onCreate()
+        startForegroundServiceNotification()
+        initSpeechRecognizer()
+    }
+    private fun startForegroundServiceNotification() {
+        val notif = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Listening for 'danger'")
+            .setContentText("Monitoring surrounding audio for emergency keywords")
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setOngoing(true)
+            .build()
+        startForeground(NOTIF_ID, notif)
+    }
+    private fun initSpeechRecognizer() {
+        try {
+            if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+                Log.e(TAG, "Speech recognition not available")
+                stopSelf()
+                return
+            }
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            speechRecognizer.setRecognitionListener(this)
+            recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            }
+            startListeningSafe()
+        } catch (e: Exception) {
+            Log.e(TAG, "init error: ${e.localizedMessage}")
+            stopSelf()
+        }
+    }
+    private fun startListeningSafe() {
+        try {
+            speechRecognizer.cancel()
+            speechRecognizer.startListening(recognizerIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "startListening error: ${e.localizedMessage}")
+            // retry after small delay
+            Handler(Looper.getMainLooper()).postDelayed({ startListeningSafe() }, 1000)
+        }
+    }
+    override fun onDestroy() {
+        try { speechRecognizer.stopListening(); speechRecognizer.cancel(); speechRecognizer.destroy() } catch (_: Exception) {}
+        super.onDestroy()
+    }
+    // RecognitionListener callbacks
+    override fun onReadyForSpeech(params: Bundle?) { Log.d(TAG, "Ready for speech") }
+    override fun onBeginningOfSpeech() { Log.d(TAG, "Speech began") }
+    override fun onRmsChanged(rmsdB: Float) {}
+    override fun onBufferReceived(buffer: ByteArray?) {}
+    override fun onEndOfSpeech() { Log.d(TAG, "End of speech") }
+    override fun onError(error: Int) {
+        Log.w(TAG, "Recognizer error: $error")
+        // Restart listening quickly on error
+        Handler(Looper.getMainLooper()).postDelayed({ startListeningSafe() }, 500)
+    }
+    override fun onResults(results: Bundle?) {
+        processResults(results)
+        startListeningSafe()
+    }
+    override fun onPartialResults(partialResults: Bundle?) {
+        processResults(partialResults)
+    }
+    override fun onEvent(eventType: Int, params: Bundle?) {}
+    private fun processResults(bundle: Bundle?) {
+        if (bundle == null) return
+        val matches = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
+        for (m in matches) {
+            val lowered = m.lowercase(Locale.getDefault())
+            Log.d(TAG, "Heard: $lowered")
+            if (keywordDetected(lowered)) {
+                val now = System.currentTimeMillis()
+                if (now - lastAlertTime > ALERT_COOLDOWN_MS) {
+                    lastAlertTime = now
+                    alertOthers(lowered)
+                } else {
+                    Log.d(TAG, "Alert cooldown active")
+                }
+                break
+            }
+        }
+    }
+    private fun keywordDetected(text: String): Boolean {
+        val keywords = listOf("danger", "help", "earthquake", "accident", "crash", "fire", "falling")
+        return keywords.any { text.contains(it) }
+    }
+    private fun alertOthers(sampleHeard: String) {
+        // 1) Show high-priority notification to user (so they can confirm or edit if desired)
+        val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val alertIntent = Intent(this, MainActivity::class.java)
+        val pi = PendingIntent.getActivity(this, 0, alertIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val notif = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Emergency keyword detected")
+            .setContentText("Heard: \"$sampleHeard\" — sending alerts to contacts.")
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentIntent(pi)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+        notifManager.notify(Random().nextInt(10000), notif)
+        // 2) Send SMS alerts (requires SEND_SMS permission and user grant). Wrap in try/catch.
+        try {
+            val sms = SmsManager.getDefault()
+            val message = "ALERT: Possible danger detected nearby. Heard: \"$sampleHeard\". Please check on the person/device."
+            for (num in ALERT_NUMBERS) {
+                sms.sendTextMessage(num, null, message, null, null)
+            }
+            Log.i(TAG, "SMS alerts sent")
+        } catch (se: SecurityException) {
+            Log.e(TAG, "No SEND_SMS permission: ${se.localizedMessage}")
+            // optionally fall back to other channels (e.g., notification or use network)
+        } catch (e: Exception) {
+            Log.e(TAG, "SMS send failed: ${e.localizedMessage}")
+        }
+        // 3) Optionally vibrate and produce a loud local notification so the phone user notices
+        try {
+            val vib = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) vib.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
+            else vib.vibrate(500)
+        } catch (_: Exception) {}
+    }
+}
+
+/* Restart service after boot to keep 24/7 monitoring (requires RECEIVE_BOOT_COMPLETED permission) */
+class BootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
+            val svc = Intent(context, DangerService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(svc) else context.startService(svc)
+        }
+    }
+}
