@@ -1,6 +1,154 @@
-https://drive.google.com/drive/folders/1Gk5ubSRZkPfQceDvYUiuOztC5vOC6HAV
+import { useState, useEffect } from 'react';
+import { EmergencyType } from '@/types/emergency';
+import { BluetoothConnection } from '@/components/BluetoothConnection';
+import { EmergencyTrigger } from '@/components/EmergencyTrigger';
+import { EmergencyAlertPopup } from '@/components/EmergencyAlertPopup';
+import { SystemStatus } from '@/components/SystemStatus';
+import { bluetoothManager } from '@/utils/bluetooth';
+import { notificationManager } from '@/utils/notifications';
+import { emergencyConfigs } from '@/types/emergency';
+import { toast } from 'sonner';
+import { Shield, Zap } from 'lucide-react';
 
-Mobile Application
-main popup
+const Index = () => {
+  const [currentAlert, setCurrentAlert] = useState<EmergencyType | null>(null);
+  const [bluetoothConnected, setBluetoothConnected] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [activeAlertsCount, setActiveAlertsCount] = useState(0);
 
-https://chatgpt.com/share/68e8e0f3-1404-8011-8a86-32cfe0dffa61
+  useEffect(() => {
+    // Request notification permission on mount
+    notificationManager.requestPermission().then((granted) => {
+      setNotificationsEnabled(granted);
+      if (!granted) {
+        toast.warning('Notifications Disabled', {
+          description: 'Please enable notifications for full alert functionality',
+        });
+      }
+    });
+  }, []);
+
+  const handleEmergencyTrigger = (type: EmergencyType) => {
+    const config = emergencyConfigs[type];
+    
+    // Show popup
+    setCurrentAlert(type);
+    setActiveAlertsCount(prev => prev + 1);
+
+    // Vibrate Bluetooth device or fallback to local
+    bluetoothManager.vibrate(config.vibrationPattern);
+
+    // Play sound
+    notificationManager.playEmergencySound(type);
+
+    // Show browser notification
+    notificationManager.showNotification(type, config.title, config.description);
+
+    // Show toast
+    toast.error(config.title, {
+      description: config.description,
+      icon: config.icon,
+    });
+  };
+
+  const handleAcknowledge = () => {
+    setCurrentAlert(null);
+    setActiveAlertsCount(prev => Math.max(0, prev - 1));
+    toast.success('Alert Acknowledged', {
+      description: 'Emergency alert has been acknowledged',
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Background gradient effect */}
+      <div className="fixed inset-0 bg-gradient-to-br from-background via-background to-card/30 pointer-events-none" />
+      
+      {/* Grid pattern overlay */}
+      <div className="fixed inset-0 opacity-10 pointer-events-none" 
+           style={{ backgroundImage: 'radial-gradient(circle, hsl(var(--primary)) 1px, transparent 1px)', backgroundSize: '50px 50px' }} />
+
+      <div className="relative z-10 container mx-auto px-4 py-8">
+        {/* Header */}
+        <header className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-primary/20 backdrop-blur-sm border border-primary/30">
+                <Shield className="h-8 w-8 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                  Emergency Alert System
+                </h1>
+                <p className="text-muted-foreground mt-1">
+                  AI-Powered Bluetooth Emergency Response Platform
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-status-connected/20 text-status-connected border border-status-connected/30">
+              <Zap className="h-4 w-4 animate-pulse" />
+              <span className="font-semibold">System Active</span>
+            </div>
+          </div>
+        </header>
+
+        {/* System Status */}
+        <div className="mb-8">
+          <SystemStatus
+            bluetoothConnected={bluetoothConnected}
+            notificationsEnabled={notificationsEnabled}
+            alertsActive={activeAlertsCount}
+          />
+        </div>
+
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="lg:col-span-2">
+            <EmergencyTrigger onTrigger={handleEmergencyTrigger} />
+          </div>
+          <div>
+            <BluetoothConnection onConnectionChange={setBluetoothConnected} />
+          </div>
+        </div>
+
+        {/* Info Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border">
+            <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+              <span className="text-2xl">🔔</span>
+              Multi-Channel Alerts
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Receive alerts through Bluetooth vibration, popup notifications, browser alerts, and sound.
+            </p>
+          </div>
+          <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border">
+            <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+              <span className="text-2xl">⚡</span>
+              Instant Response
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Emergency alerts are triggered instantly with custom vibration patterns and sounds.
+            </p>
+          </div>
+          <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border">
+            <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+              <span className="text-2xl">🛡️</span>
+              Reliable System
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Built-in failsafes ensure alerts are delivered even if Bluetooth connection fails.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Alert Popup */}
+      {currentAlert && (
+        <EmergencyAlertPopup type={currentAlert} onAcknowledge={handleAcknowledge} />
+      )}
+    </div>
+  );
+};
+
+export default Index;
