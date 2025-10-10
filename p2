@@ -1,0 +1,353 @@
+// --- SilentCommunicator.kt ---
+// This file contains the conceptual core logic for the AI-Powered Silent Communicator application.
+// In a real Android project, this code would be distributed across multiple files (Service, Activity, Data Models, Repositories)
+// and rely on Android SDK imports (e.g., android.app.Service, android.location.Location).
+// We use placeholder types and mocked utilities to keep it runnable as a single-file Kotlin application logic.
+
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlin.random.Random
+import kotlin.time.Duration.Companion.seconds
+
+// ==================================================================================
+// 1. MOCK ANDROID/FIREBASE FRAMEWORK COMPONENTS
+// ==================================================================================
+
+/** Mocked type aliases to represent Android SDK components not available here. */
+typealias Context = Any
+typealias Location = Pair<Double, Double> // (Latitude, Longitude)
+typealias User = String
+
+// Global Mocks (would be injected in a real app)
+val firebaseConfig = mapOf("apiKey" to "YOUR_API_KEY", "projectId" to "silent-comm-id")
+const val GEMINI_LIVE_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-live-2.5-flash-preview:generateContent"
+const val FOREGROUND_SERVICE_NOTIFICATION_ID = 101
+
+// ==================================================================================
+// 2. FIRESTORE DATA MODELS AND MANAGER (Persistence Layer)
+// ==================================================================================
+
+@Serializable
+data class UserSettings(
+    val defaultLanguage: String, // e.g., "en"
+    val emergencyContactNumber: String, // e.g., "+15551234567"
+    val sirenPreference: String, // e.g., "SINE_WAVE_BEEP"
+    val wearableConnectedId: String? = null,
+    val userId: String
+)
+
+class FirestoreManager(private val appId: String) {
+    private val profilePath: String = "/artifacts/$appId/users/{userId}/settings/profile"
+
+    // Mocked function for fetching user data. In a real app, this would use Firestore's getDoc/onSnapshot.
+    fun fetchUserSettings(userId: String): UserSettings {
+        println("[DB] Fetching settings for $userId...")
+        return UserSettings(
+            defaultLanguage = "en",
+            emergencyContactNumber = "+15551234567",
+            sirenPreference = "SOS_VIBRATION_PATTERN",
+            userId = userId
+        )
+    }
+
+    // Mocked function for authentication. In a real app, this uses signInWithCustomToken.
+    suspend fun authenticate(customToken: String): User {
+        println("[AUTH] Authenticating user with custom token...")
+        // Simulate successful sign-in
+        return "user-${customToken.take(8)}"
+    }
+}
+
+// ==================================================================================
+// 3. GEMINI LIVE API STRUCTURES AND INTEGRATION
+// ==================================================================================
+
+// Enums matching the structured output schema from system_architecture.md
+enum class Classification { EMERGENCY, COMMAND, ANNOUNCEMENT, CASUAL_SPEECH }
+enum class Priority { HIGH, MEDIUM, LOW }
+enum class CommandAction { NAVIGATION, ALERT_ACKNOWLEDGE, NONE }
+
+@Serializable
+data class CommandData(
+    val action: CommandAction,
+    val target: String?
+)
+
+@Serializable
+data class AiResponse(
+    val classification: Classification,
+    val priority: Priority,
+    val source_language: String,
+    val original_text: String,
+    val translated_text: String,
+    val command_data: CommandData,
+    val severity_level: String // e.g., "1km_EARTHQUAKE" or "30m_ACCIDENT"
+)
+
+class GeminiLiveApi(private val apiKey: String) {
+    private val systemInstruction = """
+        You are a real-time, context-aware audio classifier and translator. Your primary goal is to monitor for high-priority sound events 
+        (sirens, glass breaking, shouts of distress) and user commands. Ignore all background music, casual chatter, and static noise. 
+        All responses MUST be returned as a JSON object matching the 'AiResponse' schema. The user's default language is English.
+    """.trimIndent()
+
+    // Mocked WebSocket connection and streaming logic
+    suspend fun establishSession(userId: String) {
+        println("[GEMINI] WebSocket session established for $userId. Ready to stream audio.")
+    }
+
+    // Mocked audio processing. In reality, this would be a continuous stream of chunks.
+    suspend fun processAudioChunk(chunk: ByteArray): AiResponse {
+        // Mock a delayed, asynchronous response from the API after processing.
+        kotlinx.coroutines.delay(Random.nextLong(500, 1500))
+
+        // Simulate different AI outputs based on a random event
+        return when (Random.nextInt(5)) {
+            0 -> AiResponse(
+                classification = Classification.EMERGENCY,
+                priority = Priority.HIGH,
+                source_language = "es",
+                original_text = "¡Rompimiento de cristal! Necesito ayuda.",
+                translated_text = "Glass breaking! I need help.",
+                command_data = CommandData(CommandAction.NONE, null),
+                severity_level = "30m_ACCIDENT"
+            )
+            1 -> AiResponse(
+                classification = Classification.COMMAND,
+                priority = Priority.MEDIUM,
+                source_language = "en",
+                original_text = "Navigate to the nearest safe place.",
+                translated_text = "Navigate to the nearest safe place.",
+                command_data = CommandData(CommandAction.NAVIGATION, "Nearest Shelter"),
+                severity_level = "NONE"
+            )
+            2 -> AiResponse(
+                classification = Classification.ANNOUNCEMENT,
+                priority = Priority.LOW,
+                source_language = "fr",
+                original_text = "Attention, un avis de circulation.",
+                translated_text = "Attention, a traffic announcement.",
+                command_data = CommandData(CommandAction.NONE, null),
+                severity_level = "NONE"
+            )
+            else -> AiResponse( // CASUAL_SPEECH or ignored noise
+                classification = Classification.CASUAL_SPEECH,
+                priority = Priority.LOW,
+                source_language = "en",
+                original_text = "The weather is nice today.",
+                translated_text = "The weather is nice today.",
+                command_data = CommandData(CommandAction.NONE, null),
+                severity_level = "NONE"
+            )
+        }
+    }
+}
+
+// ==================================================================================
+// 4. ALERTING AND PERIPHERAL MANAGER
+// ==================================================================================
+
+class AlertManager(private val settings: UserSettings) {
+    private val peripheralManager = PeripheralManager()
+
+    private fun proximityCheck(alertLocation: Location, userLocation: Location, range: Double): Boolean {
+        // Mocked distance calculation: returns true if outside range
+        val distance = Random.nextDouble(50.0, 5000.0) // 50m to 5km
+        val requiredRange = when (range) {
+            1000.0 -> 1000.0 // 1km
+            30.0 -> 30.0     // 30m
+            else -> range
+        }
+        return distance > requiredRange
+    }
+
+    fun triggerAlertProtocol(response: AiResponse, userLocation: Location) {
+        val severityParts = response.severity_level.split("_")
+        val proximityRange = severityParts.firstOrNull()?.replace("m", "")?.replace("km", "")?.toDoubleOrNull()
+            ?.let { if (severityParts.contains("km")) it * 1000 else it } ?: 0.0
+
+        println("\n--- ALERT PROTOCOL TRIGGERED ---")
+        println("Classification: ${response.classification}, Priority: ${response.priority}")
+        println("Translated: ${response.translated_text}")
+
+        when (response.classification) {
+            Classification.EMERGENCY -> {
+                println("[VISUAL] Displaying UNINTERRUPTIBLE POPUP: ${response.translated_text}")
+                println("[HAPTIC] Sending SOS Vibration Pattern to Wearable (${settings.wearableConnectedId})")
+                peripheralManager.sendHaptic(settings.sirenPreference)
+
+                val alertLocation = userLocation // Assume emergency is around the user for now
+                if (!proximityCheck(alertLocation, userLocation, proximityRange)) {
+                    println("[LOCATION] User is WITHIN ${proximityRange}m proximity of the alert source.")
+                    println("[AUTHORITY] Sending SMS to ${settings.emergencyContactNumber} with location.")
+                    // Mock SMS intent logic here
+                } else {
+                    println("[LOCATION] User is OUTSIDE safety range.")
+                }
+            }
+            Classification.COMMAND -> {
+                println("[UI] Displaying command: ${response.translated_text}")
+                if (response.command_data.action == CommandAction.NAVIGATION && response.command_data.target != null) {
+                    println("[ACTION] Initiating Google Maps navigation to: ${response.command_data.target}")
+                }
+            }
+            Classification.ANNOUNCEMENT -> {
+                println("[UI] Displaying announcement: ${response.translated_text}")
+                if (settings.wearableConnectedId != null) {
+                    println("[TTS] Streaming announcement to Bluetooth earpiece.")
+                    peripheralManager.sendHaptic("SOFT_VIBRATION") // Soft notification
+                }
+            }
+            else -> println("[INFO] Casual speech or low priority event ignored.")
+        }
+        println("------------------------------\n")
+    }
+}
+
+class PeripheralManager {
+    fun sendHaptic(pattern: String) {
+        println("[HAPTICS] Activating pattern: $pattern")
+        // In a real app, this uses Android Vibrator or Bluetooth GATT profile.
+    }
+}
+
+// ==================================================================================
+// 5. THE 24/7 AI PROCESSING PIPELINE (Foreground Service)
+// ==================================================================================
+
+class SilentCommService(
+    private val context: Context,
+    private val apiKey: String,
+    private val userId: String
+) {
+    private lateinit var settings: UserSettings
+    private val dbManager = FirestoreManager("default-app-id")
+    private val geminiApi = GeminiLiveApi(apiKey)
+    private var isRunning = false
+
+    // Mocked AudioRecord chunk size (5 seconds @ 16kHz, 16-bit mono)
+    private val audioChunkSize = 16000 * 2 * 5
+    private val audioChunk = ByteArray(audioChunkSize) { Random.nextByte() } // Mock 5s of PCM audio
+
+    // Mocked continuous loop for 24/7 operation
+    suspend fun startProcessingLoop() {
+        if (isRunning) return
+        isRunning = true
+        settings = dbManager.fetchUserSettings(userId)
+        val alertManager = AlertManager(settings)
+
+        // 1. Establish Gemini Session
+        geminiApi.establishSession(userId)
+
+        println("[SERVICE] Starting 24/7 Audio Processing Loop...")
+        while (isRunning) {
+            // 2. Capture Audio & Location
+            val userLocation = LocationTracker.getCurrentLocation(context)
+            // Mock: Start audio capture via AudioRecord API
+            // AudioRecord.read(audioChunk, ...)
+
+            // 3. Process Audio Chunk with Gemini Live API
+            try {
+                val response = geminiApi.processAudioChunk(audioChunk)
+
+                // 4. Context-Aware Alerting
+                alertManager.triggerAlertProtocol(response, userLocation)
+
+            } catch (e: Exception) {
+                println("[ERROR] Gemini API failed: ${e.message}")
+            }
+
+            // Loop delay (Simulate 5s chunks + processing time)
+            kotlinx.coroutines.delay(5.seconds)
+        }
+        println("[SERVICE] Processing loop stopped.")
+    }
+
+    fun stopProcessingLoop() {
+        isRunning = false
+    }
+}
+
+object LocationTracker {
+    fun getCurrentLocation(context: Context): Location {
+        // Mock battery-optimized location services
+        return Pair(34.0522, -118.2437) // Mock: Los Angeles
+    }
+}
+
+// ==================================================================================
+// 6. MAIN ACTIVITY (UI and Service Lifecycle Management)
+// ==================================================================================
+
+class MainActivity(private val context: Context, private val token: String, private val apiKey: String) {
+    private val dbManager = FirestoreManager("default-app-id")
+    private var userId: String? = null
+    private var service: SilentCommService? = null
+
+    suspend fun onCreate() {
+        println("\n[MAIN] Application Starting...")
+
+        // 1. Authenticate User (Mocked Firebase Auth)
+        try {
+            userId = dbManager.authenticate(token)
+            println("[MAIN] Authentication successful. User ID: $userId")
+            showDashboard(userId!!)
+        } catch (e: Exception) {
+            println("[MAIN] Authentication failed.")
+        }
+    }
+
+    private fun showDashboard(id: String) {
+        println("\n[UI] Displaying Silent Communicator Dashboard for User: $id")
+        println("[UI] Status: Ready. Tap 'START' to activate 24/7 monitoring.")
+
+        // In a real app, button clicks would call startMonitoring
+        startMonitoring(id)
+    }
+
+    fun startMonitoring(id: String) {
+        if (service == null) {
+            // 2. Start Foreground Service
+            service = SilentCommService(context, apiKey, id)
+            // In a real app, this initiates the Android Service via startForegroundService(Intent)
+            println("[ANDROID] Starting Foreground Service (Type: microphone, location) with Notification ID $FOREGROUND_SERVICE_NOTIFICATION_ID.")
+            
+            // Start the core logic loop in a coroutine
+            kotlinx.coroutines.GlobalScope.launch {
+                service?.startProcessingLoop()
+            }
+        }
+    }
+
+    fun stopMonitoring() {
+        service?.stopProcessingLoop()
+        service = null
+        println("[ANDROID] Foreground Service stopped.")
+    }
+}
+
+// ==================================================================================
+// 7. APPLICATION ENTRY POINT (Demonstration)
+// ==================================================================================
+
+// Used to run the application logic demonstration
+import kotlinx.coroutines.*
+
+fun main() = runBlocking {
+    // These variables would typically be defined by the Canvas environment or secrets management
+    val MOCK_API_KEY = "mock-gemini-key"
+    val MOCK_CUSTOM_TOKEN = "jwt-canvas-auth-12345"
+
+    val mockContext = object : Context {} // Simple object to mock the context
+    val app = MainActivity(mockContext, MOCK_CUSTOM_TOKEN, MOCK_API_KEY)
+
+    // Simulate the application lifecycle
+    app.onCreate()
+
+    // Let the monitoring run for a few simulated cycles (e.g., 20 seconds of real time)
+    println("\n[SIMULATION] Running 24/7 monitoring for 20 simulated seconds...")
+    delay(20.seconds)
+
+    app.stopMonitoring()
+    println("\n[SIMULATION] Application gracefully terminated.")
+}
