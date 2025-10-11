@@ -1,7 +1,13 @@
+We, The "Stellar Arc"
 
-https://drive.google.com/drive/folders/1Gk5ubSRZkPfQceDvYUiuOztC5vOC6HAV
+__Consisting of__ 
 
-Mobile Application
-main popup
-
-https://chatgpt.com/share/68e8e0f3-1404-8011-8a86-32cfe0dffa61)
+>Ashwin Vijith
+>>Team Lead
+>>>Architecht
+>Anupam B
+>>Team Member
+>>>Creation Application Expert
+>Adarsh PR
+>>Team Member
+>>>FrontEnd Designer
