@@ -2,27 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Emergency Reporting with Background</title>
+  <title>Emergency Reporting with Location and Mic Icon</title>
   <style>
     body, html {
       margin: 0; padding: 0; height: 100%;
-      overflow: hidden;
       font-family: Arial, sans-serif;
+      overflow: auto;
     }
     #background {
       position: fixed;
-      width: 100%; height: 100%;
-      z-index: -1;
+      width: 100%;
+      height: 100%;
       top: 0; left: 0;
+      z-index: -1;
     }
     .container {
       position: relative;
-      max-width: 600px; 
-      margin: 2rem auto; 
-      background-color: rgba(255, 255, 255, 0.93);
+      max-width: 600px;
+      margin: 2rem auto;
+      background-color: rgba(255, 255, 255, 0.3);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
       border-radius: 10px;
       padding: 2rem;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       z-index: 1;
     }
     .top-nav {
@@ -33,25 +36,38 @@
       text-decoration:none; color: #333; border: 1px solid #999;
       font-weight: bold;
     }
-    .top-nav a:hover { background: #ffe066; }
-    label { margin-top: 1rem; display: block; }
+    .top-nav a:hover { background: #fff460; }
+    label { display: block; margin-top: 1rem; }
     select, textarea {
       width: 100%; margin-top: 0.5rem; padding: 0.7rem;
       font-size: 1em; border-radius: 5px; border:1px solid #ccc;
       box-sizing: border-box;
     }
     textarea { resize: vertical; height: 100px; }
-    button {
+    button.submit-btn {
       margin-top: 1.5rem; width: 100%; padding: 0.8rem;
       font-size: 1em; border-radius: 5px; border: none;
-      background-color: #4CAF50; color: white; cursor: pointer;
+      background-color: #4CAF50; color: rgb(255, 255, 255); cursor: pointer;
     }
-    button:hover { background-color: #388E3C; }
+    button.submit-btn:hover { background-color: #388E3C; }
     #micButton {
-      background-color: #ff6666; border: none;
-      border-radius: 50%; width: 40px; height: 40px;
-      cursor: pointer; margin-left: 10px;
+      background-color: #ff0000;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      cursor: pointer;
+      margin-left: 10px;
       vertical-align: middle;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      transition: background-color 0.3s ease;
+    }
+    #micIcon {
+      fill: white;
+      width: 22px;
+      height: 22px;
     }
   </style>
 </head>
@@ -72,11 +88,19 @@
         <option value="Other">Other</option>
       </select>
       <label for="details">Details
-        <button type="button" id="micButton" title="Click to Speak"></button>
+        <button type="button" id="micButton" title="Click to Speak" aria-label="Start speech recognition">
+          <svg id="micIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3z"/>
+            <path d="M19 10v1a7 7 0 01-14 0v-1"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
       </label>
       <textarea id="details" required></textarea>
-      <button type="submit">Submit Report</button>
+      <button type="submit" class="submit-btn">Submit Report</button>
     </form>
+    <div id="locationMessage" style="margin-top:1rem; font-size:0.9rem; color:#555;"></div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
@@ -99,6 +123,39 @@
     const micButton = document.getElementById('micButton');
     const detailsInput = document.getElementById('details');
     const typeSelect = document.getElementById('typeOfEmergency');
+    const locationMessage = document.getElementById('locationMessage');
+
+    let userLatitude = null;
+    let userLongitude = null;
+    let lastReportedPosition = null;
+
+    // Calculate distance in meters between two lat-long points (Haversine formula)
+    function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371000; // Radius of earth in meters
+      const dLat = degreesToRadians(lat2-lat1);
+      const dLon = degreesToRadians(lon2-lon1);
+      const a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+            Math.cos(degreesToRadians(lat1))*Math.cos(degreesToRadians(lat2)) *
+            Math.sin(dLon/2)*Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+    function degreesToRadians(deg) {
+      return deg * (Math.PI/180);
+    }
+
+    function updateMicColor(distanceMeters) {
+      // Map distance from 0 to 1000 meters with colors from red to green
+      // 0-250 meters red, 250-500 orange, 500-750 yellow, 750+ green
+      if (distanceMeters === null) {
+        micButton.style.backgroundColor = '#ff0000';
+        return;
+      }
+      if (distanceMeters < 250) micButton.style.backgroundColor = '#ff0000'; // red
+      else if (distanceMeters < 500) micButton.style.backgroundColor = '#ff6600'; // orange
+      else if (distanceMeters < 750) micButton.style.backgroundColor = '#ffff00'; // yellow
+      else micButton.style.backgroundColor = '#00cc00'; // green
+    }
 
     function detectEmergencyType(text) {
       text = text.toLowerCase();
@@ -108,6 +165,7 @@
       return 'Other';
     }
 
+    // Setup Speech Recognition
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
@@ -132,25 +190,89 @@
       micButton.style.display = 'none';
     }
 
+
+    // Get user location and watch position to update mic color dynamically
+    function startLocationTracking() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            userLatitude = pos.coords.latitude;
+            userLongitude = pos.coords.longitude;
+            locationMessage.textContent = `Your location captured: ${userLatitude.toFixed(6)}, ${userLongitude.toFixed(6)}`;
+            updateDistanceAndMicColor();
+          }, err => {
+            locationMessage.textContent = "Could not get location. Enable location services.";
+          });
+
+        // Watch position continuously changes and update mic color
+        navigator.geolocation.watchPosition(
+          pos => {
+            userLatitude = pos.coords.latitude;
+            userLongitude = pos.coords.longitude;
+            updateDistanceAndMicColor();
+          },
+          err => {
+            locationMessage.textContent = "Location tracking failed.";
+          },
+          {enableHighAccuracy: true, maximumAge: 10000, timeout: 5000}
+        );
+      } else {
+        locationMessage.textContent = "Geolocation not supported by browser.";
+      }
+    }
+
+    function updateDistanceAndMicColor() {
+      // Get last reported position from localStorage (if any)
+      const reports = JSON.parse(localStorage.getItem('reports') || '[]');
+      if (reports.length === 0) {
+        updateMicColor(null);
+        return;
+      }
+      const lastReport = reports[reports.length - 1];
+      lastReportedPosition = {lat: lastReport.latitude, lon: lastReport.longitude};
+      if (userLatitude === null || userLongitude === null || lastReportedPosition.lat === null || lastReportedPosition.lon === null) {
+        updateMicColor(null);
+        return;
+      }
+      const dist = getDistanceFromLatLonInMeters(userLatitude, userLongitude, lastReportedPosition.lat, lastReportedPosition.lon);
+      updateMicColor(dist);
+      // Optionally update location message too
+      locationMessage.textContent = `Current Location: ${userLatitude.toFixed(6)}, ${userLongitude.toFixed(6)}. Distance from last report: ${dist.toFixed(1)} m`;
+    }
+
+    startLocationTracking();
+
+    // On submit save report with current location
     document.getElementById('reportForm').addEventListener('submit', e => {
       e.preventDefault();
       const type = typeSelect.value;
       const details = detailsInput.value.trim();
+
       if (!type || !details) {
         alert('Please fill all fields');
         return;
       }
+      if (userLatitude === null || userLongitude === null) {
+        alert('Waiting for location to be detected. Please allow location services.');
+        return;
+      }
+
       const report = {
         id: Date.now(),
         type,
         details,
-        date: new Date().toLocaleString()
+        date: new Date().toLocaleString(),
+        latitude: userLatitude,
+        longitude: userLongitude
       };
+
       let reports = JSON.parse(localStorage.getItem('reports')) || [];
       reports.push(report);
       localStorage.setItem('reports', JSON.stringify(reports));
       alert('Report saved locally!');
+
       e.target.reset();
+      locationMessage.textContent = 'Waiting for location...';
     });
   </script>
 </body>
