@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Live Reports with Globe Background and Locations</title>
+  <title>Emergency Reporting with Proximity Indicator</title>
   <style>
     body, html {
       margin: 0; padding: 0; height: 100%;
@@ -10,109 +10,243 @@
       overflow: auto;
     }
     #background {
-      position: fixed;
-      width: 100%;
-      height: 100%;
-      top: 0; left: 0;
-      z-index: -1;
+      position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: -1;
     }
     .container {
-      position: relative;
-      max-width: 600px;
-      margin: 2rem auto;
-      background-color: rgba(255, 255, 255, 0.3);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      border-radius: 10px;
-      padding: 2rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      position: relative; max-width: 600px; margin: 2rem auto;
+      background-color: rgba(255,255,255,0.3);
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      border-radius: 10px; padding: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       z-index: 1;
     }
     .top-nav {
       text-align: right; margin-bottom: 1rem;
     }
     .top-nav a {
-      background:#FFD700; padding: 0.6rem 1rem; border-radius:6px;
-      text-decoration:none; color: #333; border: 1px solid #999;
-      font-weight: bold;
+      background: #FFD700; padding: 0.6rem 1rem; border-radius: 6px; text-decoration: none;
+      color: #333; border: 1px solid #999; font-weight: bold;
     }
-    .top-nav a:hover { background: #ffe066; }
-    .report {
-      border: 1px solid #ccc;
-      padding: 1rem;
-      margin-bottom: 1.5rem;
-      border-radius: 6px;
-      background: #f9f9f9;
+    .top-nav a:hover {
+      background: #ffe066;
     }
-    .report h3 { margin: 0 0 0.4rem 0; }
-    .report .date { font-size: 0.9rem; color: #888; }
-    .report .location {
-      font-size: 0.85rem;
-      color: #666;
-      margin-top: 0.4rem;
-      word-wrap: break-word;
+    label {
+      display: flex;
+      align-items: center;
+      margin-top: 1rem;
     }
-    .no-reports { text-align:center; color: #888; padding: 2rem 0; }
+    .indicator-label {
+      margin-right: 10px;
+    }
+    #proximityIndicator {
+      border: none;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      margin-left: 8px;
+      margin-right: 4px;
+      transition: background-color 0.7s cubic-bezier(.44,1.48,.57,.99);
+      pointer-events: none;
+      background-color: #ff0000;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.14);
+    }
+    select, textarea {
+      width: 100%; margin-top: 0.5rem; padding: 0.7rem;
+      font-size: 1em; border-radius: 5px; border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+    textarea {
+      resize: vertical;
+      height: 100px;
+    }
+    button.submit-btn {
+      margin-top: 1.5rem;
+      width: 100%;
+      padding: 0.8rem;
+      font-size: 1em;
+      border-radius: 5px;
+      border: none;
+      background-color: #4CAF50;
+      color: white;
+      cursor: pointer;
+    }
+    button.submit-btn:hover {
+      background-color: #388E3C;
+    }
+    #locationMessage {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+      color: #555;
+    }
   </style>
 </head>
 <body>
   <div id="background"></div>
   <div class="container">
     <div class="top-nav">
-      <a href="report.html">Report</a>
+      <a href="reports.html" target="_blank">View Live Reports</a>
     </div>
-    <h2>Live Reports</h2>
-    <div id="reportsContainer"></div>
+    <h2>Submit Emergency Report</h2>
+    <form id="reportForm">
+      <label for="typeOfEmergency">
+        <span class="indicator-label">Type of Emergency</span>
+        <div id="proximityIndicator" title="Proximity Indicator"></div>
+      </label>
+      <select id="typeOfEmergency" required>
+        <option value="">-- Select --</option>
+        <option value="Medical/Accident">Medical/Accident</option>
+        <option value="Hazard/Chemical">Hazard/Chemical</option>
+        <option value="Natural Calamities/Destruction">Natural Calamities/Destruction</option>
+        <option value="Other">Other</option>
+      </select>
+      <label for="details">Details</label>
+      <textarea id="details" required></textarea>
+      <button type="submit" class="submit-btn">Submit Report</button>
+      <div id="locationMessage"></div>
+    </form>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.globe.min.js"></script>
   <script>
     VANTA.GLOBE({
-      el: "#background",
+      el: '#background',
       mouseControls: true,
       touchControls: true,
       gyroControls: false,
-      minHeight: 200.00,
-      minWidth: 200.00,
-      scale: 1.00,
-      scaleMobile: 1.00,
+      minHeight: 200,
+      minWidth: 200,
+      scale: 1,
+      scaleMobile: 1,
       color: 0xff0000,
       color2: 0xe3ff00,
       backgroundColor: 0x000000
     });
 
-    const container = document.getElementById('reportsContainer');
+    const proximityIndicator = document.getElementById('proximityIndicator');
+    const typeSelect = document.getElementById('typeOfEmergency');
+    const locationMessage = document.getElementById('locationMessage');
 
-    function removeOldReports(reports, expiryMins = 30) {
-      const cutoff = Date.now() - expiryMins * 60000;
-      return reports.filter(r => r.id > cutoff);
+    let userLatitude = null;
+    let userLongitude = null;
+    let bestAccuracy = Infinity;
+    let lastUpdateTime = 0;
+
+    function getThresholdByType(type) {
+      switch(type) {
+        case 'Medical/Accident': return 2.5;
+        case 'Hazard/Chemical': return 5;
+        case 'Natural Calamities/Destruction': return 10;
+        default: return 5;
+      }
+    }
+    function degreesToRadians(deg) {
+      return deg * (Math.PI/180);
+    }
+    function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const dLat = degreesToRadians(lat2 - lat1);
+      const dLon = degreesToRadians(lon2 - lon1);
+      const a = Math.sin(dLat/2)**2 + Math.cos(degreesToRadians(lat1))*Math.cos(degreesToRadians(lat2))*Math.sin(dLon/2)**2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R*c;
+    }
+    function interpolateColor(ratio) {
+      const r = Math.floor(255 * (1 - ratio));
+      const g = Math.floor(255 * ratio);
+      return `rgb(${r},${g},0)`;
+    }
+    function updateProximityIndicator() {
+      let reports = JSON.parse(localStorage.getItem('reports')) || [];
+      if (reports.length === 0 || userLatitude === null || userLongitude === null) {
+        proximityIndicator.style.backgroundColor = '#ff0000';
+        return;
+      }
+      const lastReport = [...reports].reverse().find(r => r.type === typeSelect.value);
+      if (!lastReport || lastReport.latitude === null || lastReport.longitude === null) {
+        proximityIndicator.style.backgroundColor = '#ff0000';
+        return;
+      }
+      const dist = getDistanceFromLatLonInMeters(userLatitude, userLongitude, lastReport.latitude, lastReport.longitude);
+      const threshold = getThresholdByType(typeSelect.value);
+      let color;
+      if (dist <= threshold) {
+        color = 'rgb(255,0,0)';
+      } else if (dist <= threshold + 2) {
+        const fadeRatio = (dist - threshold)/2;
+        color = interpolateColor(fadeRatio);
+      } else {
+        color = 'rgb(0,255,0)';
+      }
+      proximityIndicator.style.backgroundColor = color;
+    }
+    function startLocationWatch() {
+      if (!navigator.geolocation) {
+        locationMessage.textContent = "Geolocation not supported by browser.";
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          bestAccuracy = pos.coords.accuracy;
+          userLatitude = pos.coords.latitude;
+          userLongitude = pos.coords.longitude;
+          locationMessage.textContent = `Approximate location: ${userLatitude.toFixed(6)}, ${userLongitude.toFixed(6)} (Accuracy: ${bestAccuracy.toFixed(1)}m)`;
+          updateProximityIndicator();
+          navigator.geolocation.watchPosition(onHighAccuracyPos, onError, {enableHighAccuracy:true,maximumAge:0,timeout:15000});
+        },
+        err => {
+          locationMessage.textContent = "Could not get location.";
+        },
+        {enableHighAccuracy:false,timeout:5000}
+      );
+    }
+    function onHighAccuracyPos(pos) {
+      if (pos.coords.accuracy < bestAccuracy) {
+        bestAccuracy = pos.coords.accuracy;
+        userLatitude = pos.coords.latitude;
+        userLongitude = pos.coords.longitude;
+        const now = Date.now();
+        if (now - lastUpdateTime > 1000) {
+          locationMessage.textContent = `Precise location: ${userLatitude.toFixed(7)}, ${userLongitude.toFixed(7)} (Accuracy: ${bestAccuracy.toFixed(1)}m)`;
+          updateProximityIndicator();
+          lastUpdateTime = now;
+        }
+      }
+    }
+    function onError(err) {
+      locationMessage.textContent = "Location error: " + err.message;
     }
 
-    let reports = JSON.parse(localStorage.getItem('reports')) || [];
-    reports = removeOldReports(reports);
-    localStorage.setItem('reports', JSON.stringify(reports));
+    startLocationWatch();
 
-    if (reports.length === 0) {
-      container.innerHTML = '<div class="no-reports">No reports available.</div>';
-    } else {
-      container.innerHTML = '';
-      reports.slice().reverse().forEach(report => {
-        const div = document.createElement('div');
-        div.className = 'report';
+    typeSelect.addEventListener('change', updateProximityIndicator);
 
-        const latitudeText = report.latitude !== undefined && report.latitude !== null ? report.latitude.toFixed(6) : 'N/A';
-        const longitudeText = report.longitude !== undefined && report.longitude !== null ? report.longitude.toFixed(6) : 'N/A';
-
-        div.innerHTML = `
-          <h3>${report.type}</h3>
-          <div class="date">${report.date}</div>
-          <p>${report.details}</p>
-          <div class="location">Location: ${latitudeText}, ${longitudeText}</div>
-        `;
-        container.appendChild(div);
-      });
-    }
+    document.getElementById('reportForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const type = typeSelect.value;
+      const details = document.getElementById('details').value.trim();
+      if (!type || !details) {
+        alert('Please fill all fields');
+        return;
+      }
+      if (userLatitude === null || userLongitude === null) {
+        alert('Waiting for location to be detected. Please allow location services.');
+        return;
+      }
+      const report = {
+        id: Date.now(),
+        type,
+        details,
+        date: new Date().toLocaleString(),
+        latitude: userLatitude,
+        longitude: userLongitude
+      };
+      let reports = JSON.parse(localStorage.getItem('reports')) || [];
+      reports.push(report);
+      localStorage.setItem('reports', JSON.stringify(reports));
+      alert('Report saved locally!');
+      e.target.reset();
+      updateProximityIndicator();
+    });
   </script>
 </body>
 </html>
