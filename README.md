@@ -1,11 +1,11 @@
-We, The "Stellar Arc"
+~We, The "Stellar Arc"~
 
 __Consisting of__ 
 
 >Ashwin Vijith
 >>Team Lead
 >>>Architecht
->>>>Github: 
+>>>>Github: https://github.com/TCOxAV
 
 >Anupam B
 >>Team Member
@@ -17,3 +17,4 @@ __Consisting of__
 >>>FrontEnd Designer
 >>>>Github: https://github.com/adarsh17171-cyber
 
+We created "ProxiGuard", a simple program which detects nearby threats reported by others and lets others know about it. 
