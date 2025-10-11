@@ -1,4 +1,4 @@
-~We, The "Stellar Arc"~
+`We, The "Stellar Arc"`
 
 __Consisting of__ 
 
