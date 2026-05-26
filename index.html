@@ -1,0 +1,75 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>ProxiGuard - Safety App</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+    <div class="app">
+        <header>
+            <h1>🛡️ ProxiGuard</h1>
+            <p class="tagline">Stay aware. Stay safe.</p>
+            <div class="mode-badge" id="modeBadge">👤 User Mode</div>
+        </header>
+
+        <div class="location-status" id="locationStatus">
+            📍 Locating you...
+        </div>
+
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+
+        <div class="alert-panel" id="alertPanel" style="display: none;">
+            <div class="alert-header">
+                <span>⚠️ DANGER NEARBY</span>
+                <span id="dangerType"></span>
+            </div>
+            <div class="distance-bar">
+                <div class="distance-fill" id="distanceFill"></div>
+            </div>
+            <div class="distance-text" id="distanceText"></div>
+            <button id="silenceBtn" class="silence-btn">🔇 Mute for 30s</button>
+        </div>
+
+        <!-- Admin Panel (hidden by default) -->
+        <div id="adminPanel" class="admin-panel" style="display: none;">
+            <h3>🔧 Admin Controls</h3>
+            <div class="admin-stats" id="adminStats"></div>
+            <div class="admin-reports" id="adminReportsList"></div>
+            <button id="exitAdminBtn" class="exit-admin-btn">Exit Admin Mode</button>
+        </div>
+
+        <!-- User Panel -->
+        <div id="userPanel">
+            <div class="report-section">
+                <h3>Report an Incident</h3>
+                <select id="reportType">
+                    <option value="accident">🚗 Accident (Range: 200m)</option>
+                    <option value="fire">🔥 Fire (Range: 300m)</option>
+                    <option value="danger">⚠️ General Danger (Range: 150m)</option>
+                    <option value="police">👮 Police Activity (Range: 100m)</option>
+                </select>
+                <button id="reportBtn" class="report-btn">📢 Report Here</button>
+            </div>
+
+            <div class="reports-list">
+                <h3>Nearby Reports</h3>
+                <div id="reportsList"></div>
+            </div>
+        </div>
+
+        <!-- Admin Access Button -->
+        <button id="adminAccessBtn" class="admin-access-btn">🔐 Admin Access</button>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
